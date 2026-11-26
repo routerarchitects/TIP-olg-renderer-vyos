@@ -154,12 +154,21 @@ func (r *Renderer) Render(ctx context.Context, input Input) (Output, error) {
 		return Output{}, newError(CodeMissingConfig, "payload contains no renderable config", nil)
 	}
 
+	var portRoles map[string]string
+	if len(normalized.Interfaces.PhysicalPortRoles) > 0 {
+		portRoles = make(map[string]string, len(normalized.Interfaces.PhysicalPortRoles))
+		for k, v := range normalized.Interfaces.PhysicalPortRoles {
+			portRoles[k] = v
+		}
+	}
+
 	return Output{
-		Target:        input.Target,
-		ConfigUUID:    input.ConfigUUID,
-		SchemaName:    input.SchemaName,
-		SchemaVersion: input.SchemaVersion,
-		RenderedText:  renderedText,
+		Target:            input.Target,
+		ConfigUUID:        input.ConfigUUID,
+		SchemaName:        input.SchemaName,
+		SchemaVersion:     input.SchemaVersion,
+		RenderedText:      renderedText,
+		PhysicalPortRoles: portRoles,
 	}, nil
 }
 

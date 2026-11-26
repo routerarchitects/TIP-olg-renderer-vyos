@@ -13,11 +13,12 @@ type Input struct {
 
 // Output is the canonical render response payload.
 type Output struct {
-	Target        string
-	ConfigUUID    string
-	SchemaName    string
-	SchemaVersion string
-	RenderedText  string
+	Target            string
+	ConfigUUID        string
+	SchemaName        string
+	SchemaVersion     string
+	RenderedText      string
+	PhysicalPortRoles map[string]string
 }
 
 // Info describes renderer capabilities.

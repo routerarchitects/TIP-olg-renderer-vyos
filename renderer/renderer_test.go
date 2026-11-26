@@ -1127,3 +1127,87 @@ func mustReadFile(t *testing.T, path string) []byte {
 	}
 	return data
 }
+
+func TestPortMap_DefaultResolution(t *testing.T) {
+	payload := []byte(`{
+		"interfaces": [
+			{
+				"name": "WAN",
+				"role": "upstream",
+				"ethernet": [{"select-ports": ["WAN*"]}],
+				"ipv4": {"addressing": "dynamic"}
+			},
+			{
+				"name": "LAN1",
+				"role": "downstream",
+				"ethernet": [{"select-ports": ["LAN1"]}],
+				"ipv4": {
+					"addressing": "static",
+					"subnet": "192.168.1.1/24",
+					"dhcp": {"lease-first": 100, "lease-count": 50, "lease-time": 86400}
+				}
+			}
+		]
+	}`)
+
+	out, err := renderPayload(t, payload)
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	if out.PhysicalPortRoles["eth0"] != "upstream" {
+		t.Fatalf("expected eth0=upstream, got %q", out.PhysicalPortRoles["eth0"])
+	}
+	if out.PhysicalPortRoles["eth1"] != "downstream" {
+		t.Fatalf("expected eth1=downstream, got %q", out.PhysicalPortRoles["eth1"])
+	}
+}
+
+func TestPortMap_CustomOverride(t *testing.T) {
+	payload := []byte(`{
+		"interfaces": [
+			{
+				"name": "WAN",
+				"role": "upstream",
+				"ethernet": [{"select-ports": ["WAN*"]}],
+				"ipv4": {"addressing": "dynamic"}
+			},
+			{
+				"name": "LAN1",
+				"role": "downstream",
+				"ethernet": [{"select-ports": ["LAN1"]}],
+				"ipv4": {
+					"addressing": "static",
+					"subnet": "192.168.1.1/24",
+					"dhcp": {"lease-first": 100, "lease-count": 50, "lease-time": 86400}
+				}
+			}
+		]
+	}`)
+
+	r, err := New(WithPortMap(map[string][]string{
+		"WAN*": {"eth3"},
+		"LAN1": {"eth4"},
+	}))
+	if err != nil {
+		t.Fatalf("new renderer failed: %v", err)
+	}
+	out, err := r.Render(context.Background(), Input{
+		Target:        "vyos",
+		ConfigUUID:    "cfg-custom",
+		SchemaName:    "olg-ucentral",
+		SchemaVersion: "4.2.0",
+		PayloadJSON:   payload,
+	})
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	if out.PhysicalPortRoles["eth3"] != "upstream" {
+		t.Fatalf("expected eth3=upstream, got %q", out.PhysicalPortRoles["eth3"])
+	}
+	if out.PhysicalPortRoles["eth4"] != "downstream" {
+		t.Fatalf("expected eth4=downstream, got %q", out.PhysicalPortRoles["eth4"])
+	}
+	if _, exists := out.PhysicalPortRoles["eth0"]; exists {
+		t.Fatalf("expected eth0 to be overridden, but found in PhysicalPortRoles")
+	}
+}

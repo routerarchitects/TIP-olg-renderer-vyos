@@ -53,9 +53,10 @@ type RenderData struct {
 
 // InterfacesSection contains normalized interface render data.
 type InterfacesSection struct {
-	Bridges          []Bridge
-	Ethernets        []Ethernet
-	ServiceLANInputs []ServiceLANInput
+	Bridges           []Bridge
+	Ethernets         []Ethernet
+	ServiceLANInputs  []ServiceLANInput
+	PhysicalPortRoles map[string]string
 }
 
 // Bridge describes one normalized VyOS bridge.

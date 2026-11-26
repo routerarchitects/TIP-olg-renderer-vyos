@@ -70,6 +70,8 @@ func normalizeInterfaces(root map[string]json.RawMessage, portMap map[string][]s
 	pendingVLANs := make([]pendingVLAN, 0)
 	serviceLANInputs := make([]ServiceLANInput, 0)
 	seenVLANs := make(map[int]bool)
+	physicalPortRoles := make(map[string]string)
+	ambiguousPorts := make(map[string]bool)
 
 	hasUpstreamBridge := false
 	firstDownstreamIdx := -1
@@ -109,6 +111,18 @@ func normalizeInterfaces(root map[string]json.RawMessage, portMap map[string][]s
 		portNames, err := resolveMappedPorts(entry.Ethernet, portMap)
 		if err != nil {
 			return InterfacesSection{}, newError(CodeNormalizeFailed, fmt.Sprintf("interfaces[%d]: %v", idx, err), nil)
+		}
+
+		for _, portName := range portNames {
+			if ambiguousPorts[portName] {
+				continue
+			}
+			if existingRole, exists := physicalPortRoles[portName]; exists && existingRole != entry.Role {
+				delete(physicalPortRoles, portName)
+				ambiguousPorts[portName] = true
+				continue
+			}
+			physicalPortRoles[portName] = entry.Role
 		}
 
 		isVLAN := entry.VLAN != nil && entry.VLAN.ID > 0
@@ -217,7 +231,12 @@ func normalizeInterfaces(root map[string]json.RawMessage, portMap map[string][]s
 		return ethernets[i].Name < ethernets[j].Name
 	})
 
-	return InterfacesSection{Bridges: bridges, Ethernets: ethernets, ServiceLANInputs: serviceLANInputs}, nil
+	return InterfacesSection{
+		Bridges:           bridges,
+		Ethernets:         ethernets,
+		ServiceLANInputs:  serviceLANInputs,
+		PhysicalPortRoles: physicalPortRoles,
+	}, nil
 }
 
 func serviceLANInputFromRaw(entry rawInterface, idx int, isVLAN bool) ServiceLANInput {
