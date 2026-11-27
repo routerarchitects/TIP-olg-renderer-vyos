@@ -1211,3 +1211,54 @@ func TestPortMap_CustomOverride(t *testing.T) {
 		t.Fatalf("expected eth0 to be overridden, but found in PhysicalPortRoles")
 	}
 }
+
+func TestRenderPhysicalPortRoles_SkipsUnsupportedUpstreamVLAN(t *testing.T) {
+	payload := []byte(`{
+		"interfaces": [
+			{
+				"name": "wan-base",
+				"role": "upstream",
+				"ethernet": [{"select-ports": ["WAN*"]}],
+				"ipv4": {"addressing": "dynamic"}
+			},
+			{
+				"name": "wan-vlan-ignored",
+				"role": "upstream",
+				"vlan": {"id": 100},
+				"ethernet": [{"select-ports": ["LAN1"]}],
+				"ipv4": {"addressing": "dynamic"}
+			},
+			{
+				"name": "lan-base",
+				"role": "downstream",
+				"ethernet": [{"select-ports": ["LAN1"]}],
+				"ipv4": {
+					"addressing": "static",
+					"subnet": "192.168.10.1/24",
+					"dhcp": {"lease-first": 100, "lease-count": 50, "lease-time": 86400}
+				}
+			}
+		]
+	}`)
+
+	r, err := New()
+	if err != nil {
+		t.Fatalf("new renderer failed: %v", err)
+	}
+	out, err := r.Render(context.Background(), Input{
+		Target:        "vyos",
+		ConfigUUID:    "cfg-upvlan",
+		SchemaName:    "olg-ucentral",
+		SchemaVersion: "4.2.0",
+		PayloadJSON:   payload,
+	})
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	if out.PhysicalPortRoles["eth0"] != "upstream" {
+		t.Fatalf("expected eth0=upstream, got %q", out.PhysicalPortRoles["eth0"])
+	}
+	if out.PhysicalPortRoles["eth1"] != "downstream" {
+		t.Fatalf("expected eth1=downstream (not deleted by ignored upstream VLAN), got %q", out.PhysicalPortRoles["eth1"])
+	}
+}

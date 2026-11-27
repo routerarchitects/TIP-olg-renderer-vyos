@@ -70,8 +70,6 @@ func normalizeInterfaces(root map[string]json.RawMessage, portMap map[string][]s
 	pendingVLANs := make([]pendingVLAN, 0)
 	serviceLANInputs := make([]ServiceLANInput, 0)
 	seenVLANs := make(map[int]bool)
-	physicalPortRoles := make(map[string]string)
-	ambiguousPorts := make(map[string]bool)
 
 	hasUpstreamBridge := false
 	firstDownstreamIdx := -1
@@ -111,18 +109,6 @@ func normalizeInterfaces(root map[string]json.RawMessage, portMap map[string][]s
 		portNames, err := resolveMappedPorts(entry.Ethernet, portMap)
 		if err != nil {
 			return InterfacesSection{}, newError(CodeNormalizeFailed, fmt.Sprintf("interfaces[%d]: %v", idx, err), nil)
-		}
-
-		for _, portName := range portNames {
-			if ambiguousPorts[portName] {
-				continue
-			}
-			if existingRole, exists := physicalPortRoles[portName]; exists && existingRole != entry.Role {
-				delete(physicalPortRoles, portName)
-				ambiguousPorts[portName] = true
-				continue
-			}
-			physicalPortRoles[portName] = entry.Role
 		}
 
 		isVLAN := entry.VLAN != nil && entry.VLAN.ID > 0
@@ -230,6 +216,26 @@ func normalizeInterfaces(root map[string]json.RawMessage, portMap map[string][]s
 	sort.Slice(ethernets, func(i, j int) bool {
 		return ethernets[i].Name < ethernets[j].Name
 	})
+
+	physicalPortRoles := make(map[string]string)
+	ambiguousPorts := make(map[string]bool)
+	for _, b := range bridges {
+		role := "downstream"
+		if b.Name == "br0" {
+			role = "upstream"
+		}
+		for _, portName := range b.MemberInterfaces {
+			if ambiguousPorts[portName] {
+				continue
+			}
+			if existingRole, exists := physicalPortRoles[portName]; exists && existingRole != role {
+				delete(physicalPortRoles, portName)
+				ambiguousPorts[portName] = true
+				continue
+			}
+			physicalPortRoles[portName] = role
+		}
+	}
 
 	return InterfacesSection{
 		Bridges:           bridges,
